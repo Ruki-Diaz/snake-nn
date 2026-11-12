@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Snake-NN · a neural network that learns Snake</title>
+<meta name="description" content="A neural network that plays Snake, written in NumPy only. Q-learning, hand-written backprop, no PyTorch.">
+<meta name="theme-color" content="#08090a">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#08090a; --panel:#0e0f11; --panel2:#131417; --line:rgba(255,255,255,.07); --line2:rgba(255,255,255,.12);
+  --text:#f7f8f8; --muted:#8a8f98; --dim:#62666d; --accent:#7170ff; --accent2:#5e6ad2;
+  --red:#eb5757; --green:#4cb782;
+  --sans:Inter,-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box;margin:0}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--text);font:450 14px/1.55 var(--sans);-webkit-font-smoothing:antialiased;min-height:100vh;
+  background-image:radial-gradient(900px 420px at 50% -120px,rgba(113,112,255,.16),transparent 70%)}
+a{color:inherit;text-decoration:none}
+/* top bar */
+.bar{position:sticky;top:0;z-index:5;height:48px;display:flex;align-items:center;gap:10px;padding:0 max(16px,env(safe-area-inset-left));
+  border-bottom:1px solid var(--line);background:rgba(8,9,10,.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.mark{width:20px;height:20px;border-radius:6px;background:linear-gradient(145deg,#8f8eff,#5e6ad2);display:grid;place-items:center;box-shadow:0 0 0 1px rgba(255,255,255,.15) inset}
+.mark i{width:6px;height:6px;border-radius:2px;background:#fff;opacity:.95}
+.crumb{color:var(--muted);font-size:13px;display:flex;gap:8px;align-items:center;white-space:nowrap;overflow:hidden}
+.crumb b{color:var(--text);font-weight:500}
+.crumb s{color:var(--dim);text-decoration:none}
+.sp{flex:1}
+.btn{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:7px;border:1px solid var(--line2);background:rgba(255,255,255,.03);color:var(--text);font:500 12.5px var(--sans);cursor:pointer;transition:.15s}
+.btn:hover{background:rgba(255,255,255,.07)}
+.btn.primary{background:linear-gradient(180deg,#7b7aff,#5e6ad2);border-color:rgba(255,255,255,.18);box-shadow:0 1px 0 rgba(255,255,255,.18) inset,0 4px 14px rgba(94,106,210,.35)}
+.btn.primary:hover{filter:brightness(1.1)}
+.wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+/* hero */
+.hero{padding:56px 0 28px}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;height:26px;padding:0 10px 0 8px;border:1px solid var(--line2);border-radius:99px;font-size:12px;color:var(--muted);background:rgba(255,255,255,.02)}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px rgba(76,183,130,.18)}
+h1{font-size:clamp(30px,6vw,52px);line-height:1.04;letter-spacing:-.035em;font-weight:600;margin:18px 0 14px;
+  background:linear-gradient(180deg,#fff 30%,#9a9fb0);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lead{max-width:600px;color:var(--muted);font-size:16px;line-height:1.6}
+.pills{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
+.pill{font:500 12px var(--mono);color:#c9cbd4;padding:4px 9px;border-radius:6px;border:1px solid var(--line);background:var(--panel)}
+.pill em{font-style:normal;color:var(--accent)}
+/* cards */
+.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:14px;margin-top:14px}
+.card{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:0 1px 0 rgba(255,255,255,.03) inset,0 20px 40px -24px rgba(0,0,0,.8)}
+.ch{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--muted)}
+.ch b{color:var(--text);font-weight:500;font-size:13px;white-space:nowrap}
+.cb{padding:14px}
+.seg{display:inline-flex;padding:2px;border:1px solid var(--line);border-radius:8px;background:rgba(0,0,0,.25);gap:2px}
+.seg button{all:unset;cursor:pointer;height:24px;padding:0 9px;border-radius:6px;font:500 12px/24px var(--sans);color:var(--muted);transition:.15s;white-space:nowrap}
+.seg button:hover{color:var(--text)}
+.seg button[aria-pressed=true]{background:rgba(255,255,255,.09);color:var(--text);box-shadow:0 0 0 1px var(--line2) inset}
+.board{position:relative;width:100%;aspect-ratio:1;border-radius:10px;overflow:hidden;background:#0a0b0d;border:1px solid var(--line)}
+.board canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.over{position:absolute;inset:0;display:grid;place-items:center;background:rgba(8,9,10,.55);opacity:0;transition:.2s;pointer-events:none;font-weight:500}
+.over.on{opacity:1}
+.over span{padding:6px 12px;border:1px solid var(--line2);border-radius:8px;background:var(--panel2);font-size:13px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;margin-top:12px;background:var(--line);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.stat{background:var(--panel);padding:9px 11px}
+.stat small{display:block;color:var(--dim);font-size:11px;letter-spacing:.02em}
+.stat strong{font:500 20px/1.2 var(--sans);letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.ctrl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
+.netcard{display:flex;flex-direction:column}.netcard .cb{flex:1;display:flex;flex-direction:column}.net{width:100%;flex:1;min-height:380px;display:block}
+.legend{display:flex;gap:14px;flex-wrap:wrap;color:var(--dim);font-size:11.5px;margin-top:8px}
+.legend i{display:inline-block;width:14px;height:2px;border-radius:2px;vertical-align:middle;margin-right:6px}
+.chart{width:100%;height:240px;display:block}
+.tip{position:absolute;pointer-events:none;padding:5px 8px;border:1px solid var(--line2);border-radius:7px;background:var(--panel2);font:500 11.5px var(--mono);opacity:0;transition:opacity .1s;white-space:nowrap}
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border-top:1px solid var(--line)}
+.metrics div{background:var(--panel);padding:10px 14px}
+.metrics small{display:block;color:var(--dim);font-size:11px}
+.metrics strong{font:500 17px var(--sans);letter-spacing:-.02em}
+.full{margin-top:14px}
+.how{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line)}
+.how>div{background:var(--panel);padding:16px}
+.how h3{font:500 13px var(--sans);display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.how h3 span{display:grid;place-items:center;width:18px;height:18px;border-radius:5px;background:rgba(113,112,255,.15);color:#a9a8ff;font:500 11px var(--mono)}
+.how p{color:var(--muted);font-size:13px;margin-bottom:10px}
+pre{font:400 12px/1.65 var(--mono);color:#c9cbd4;background:rgba(0,0,0,.35);border:1px solid var(--line);border-radius:8px;padding:10px 12px;overflow:auto}
+pre .k{color:#a9a8ff}pre .c{color:var(--dim)}
+footer{padding:36px 0 56px;color:var(--dim);font-size:12.5px;display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between}
+kbd{font:500 11px var(--mono);padding:1px 5px;border:1px solid var(--line2);border-bottom-width:2px;border-radius:5px;color:var(--muted)}
+@media (max-width:860px){
+  .grid{grid-template-columns:1fr}.how{grid-template-columns:1fr}.hero{padding-top:36px}.net{flex:none;height:380px}
+  .hide-m{display:none}
+}
+@media (max-width:420px){.stat strong{font-size:17px}.seg button{padding:0 6px;font-size:11.5px}.ch{padding:11px 12px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="bar">
+  <div class="mark"><i></i></div>
+  <div class="crumb"><span class="hide-m">Rukshan</span><s class="hide-m">/</s><span class="hide-m">Projects</span><s class="hide-m">/</s><b>snake-nn</b></div>
+  <div class="sp"></div>
+  <span class="hide-m" style="color:var(--dim);font-size:12px">Press <kbd>Space</kbd> to pause</span>
+  <a class="btn" id="gh" href="https://github.com/" target="_blank" rel="noopener">Source</a>
+</div>
+
+<main class="wrap">
+  <section class="hero">
+    <span class="eyebrow"><span class="dot"></span>Live &middot; runs in your browser</span>
+    <h1>A neural network<br>that learns Snake.</h1>
+    <p class="lead">No PyTorch, no black box. I wrote the forward pass, the loss and backprop by hand in NumPy, gave the network a game of Snake and nothing else. Pick a checkpoint below and watch it get smarter.</p>
+    <div class="pills"><span class="pill">11 <em>&rarr;</em> 64 <em>&rarr;</em> 3</span><span class="pill">Q-learning</span><span class="pill">NumPy only</span><span class="pill">hand-written backprop</span><span class="pill">$0 hosting</span></div>
+  </section>
+
+  <section class="grid">
+    <div class="card">
+      <div class="ch"><b>Live game</b><span class="sp"></span>
+        <div class="seg" id="ckpt" role="group" aria-label="Checkpoint"></div>
+      </div>
+      <div class="cb">
+        <div class="board"><canvas id="game"></canvas><div class="over" id="over"><span id="overT"></span></div></div>
+        <div class="stats">
+          <div class="stat"><small>Score</small><strong id="sScore">0</strong></div>
+          <div class="stat"><small>Best</small><strong id="sBest">0</strong></div>
+          <div class="stat"><small>Games</small><strong id="sGames">0</strong></div>
+          <div class="stat"><small>Avg (10)</small><strong id="sAvg">0</strong></div>
+        </div>
+        <div class="ctrl">
+          <button class="btn primary" id="play">Pause</button>
+          <button class="btn" id="restart">Restart</button>
+          <span class="sp"></span>
+          <div class="seg" id="speed" role="group" aria-label="Speed"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card netcard">
+      <div class="ch"><b>What the network sees</b><span class="sp"></span><span id="ckptLabel" style="font-family:var(--mono);font-size:11.5px"></span></div>
+      <div class="cb">
+        <canvas id="net" class="net"></canvas>
+        <div class="legend"><span><i style="background:#7170ff"></i>excitatory</span><span><i style="background:#eb5757"></i>inhibitory</span><span>lit neurons are firing right now</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card full">
+    <div class="ch"><b>Training</b><span>score per game, 400 games</span></div>
+    <div class="cb" style="position:relative"><canvas id="chart" class="chart"></canvas><div class="tip" id="tip"></div></div>
+    <div class="metrics">
+      <div><small>Best game in training</small><strong id="mBest"></strong></div>
+      <div><small>Greedy avg (30 games)</small><strong id="mEval"></strong></div>
+      <div><small>Weights</small><strong>963</strong></div>
+    </div>
+  </section>
+
+  <section class="card full">
+    <div class="ch"><b>How it works</b></div>
+    <div class="how">
+      <div><h3><span>1</span>Forward pass</h3><p>11 yes/no inputs: danger ahead, right and left, heading, and where the food is. One hidden layer picks one of 3 moves.</p>
+<pre><span class="k">h</span> = max(0, x @ W1 + b1)
+<span class="k">q</span> = h @ W2 + b2
+<span class="c"># action = argmax(q)</span></pre></div>
+      <div><h3><span>2</span>Q-learning</h3><p>Eating is +10, crashing is -10. The network learns to predict how good each move is, from its own past games.</p>
+<pre><span class="k">y</span> = r + 0.9 * max(Q(s'))
+<span class="k">loss</span> = (Q(s,a) - y)^2
+<span class="c"># replay buffer, Adam</span></pre></div>
+      <div><h3><span>3</span>Backprop</h3><p>Every crash sends an error backwards through the layers. I wrote each gradient by hand.</p>
+<pre>dq = 2*(q - y)
+dW2 = h.T @ dq
+dh  = (dq @ W2.T) * (h &gt; 0)
+dW1 = x.T @ dh</pre></div>
+    </div>
+  </section>
+
+  <footer><span>Trained in Python + NumPy &middot; inference in your browser &middot; no server, no tracking</span><span>Built by Rukshan Dias</span></footer>
+</main>
+
+<script>
+const DATA = __DATA__;
+(()=>{
+"use strict";
+const N=20, DIRS=[[1,0],[0,1],[-1,0],[0,-1]];
+const LABELS=["danger ahead","danger right","danger left","going right","going down","going left","going up","food left","food right","food up","food down"];
+const ACTS=["straight","right","left"];
+const $=id=>document.getElementById(id);
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+/* ---------- model ---------- */
+const mk=c=>({W1:c.net.W1,b1:c.net.b1,W2:c.net.W2,b2:c.net.b2});
+const cks=DATA.checkpoints.map((c,i,a)=>({game:c.game,label:i===0?"Untrained":i===a.length-1?"Trained":"Game "+c.game,m:mk(c)}));
+function forward(m,x){
+  const h=new Float32Array(64), q=[m.b2[0],m.b2[1],m.b2[2]];
+  for(let j=0;j<64;j++){let s=m.b1[j];for(let i=0;i<11;i++)if(x[i])s+=m.W1[i][j];h[j]=s>0?s:0}
+  for(let j=0;j<64;j++){const v=h[j];if(v)for(let k=0;k<3;k++)q[k]+=v*m.W2[j][k]}
+  return {h,q};
+}
+
+/* ---------- game ---------- */
+const G={body:[],dir:0,food:null,score:0,idle:0,dead:false,x:null,act:1,h:null,q:[0,0,0]};
+function hit(p){return p[0]<0||p[0]>=N||p[1]<0||p[1]>=N||G.body.slice(0,-1).some(b=>b[0]===p[0]&&b[1]===p[1])}
+function ahead(d){const[dx,dy]=DIRS[((d%4)+4)%4];return[G.body[0][0]+dx,G.body[0][1]+dy]}
+function newFood(){const f=[];for(let x=0;x<N;x++)for(let y=0;y<N;y++)if(!G.body.some(b=>b[0]===x&&b[1]===y))f.push([x,y]);G.food=f[Math.random()*f.length|0]}
+function state(){
+  const[hx,hy]=G.body[0],[fx,fy]=G.food;
+  return [hit(ahead(G.dir)),hit(ahead(G.dir+1)),hit(ahead(G.dir-1)),G.dir===0,G.dir===1,G.dir===2,G.dir===3,fx<hx,fx>hx,fy<hy,fy>hy].map(Number);
+}
+function reset(){
+  G.body=[[10,10],[9,10],[8,10]];G.dir=0;G.score=0;G.idle=0;G.dead=false;newFood();think();
+}
+let model=cks[cks.length-1].m;
+function think(){
+  G.x=state();const o=forward(model,G.x);G.h=o.h;G.q=o.q;
+  G.act=o.q.indexOf(Math.max(...o.q));
+}
+function step(){
+  G.dir=(G.dir+[0,1,-1][G.act]+4)%4;
+  const hd=ahead(G.dir);G.idle++;
+  if(hit(hd)||G.idle>100*G.body.length){G.dead=true;return}
+  G.body.unshift(hd);
+  if(hd[0]===G.food[0]&&hd[1]===G.food[1]){G.score++;G.idle=0;newFood()}else G.body.pop();
+  think();
+}
+
+/* ---------- canvas helpers ---------- */
+function fit(c){
+  const r=c.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,2);
+  c.width=Math.round(r.width*d);c.height=Math.round(r.height*d);
+  const x=c.getContext("2d");x.setTransform(d,0,0,d,0,0);return{x,w:r.width,h:r.height};
+}
+let gv,nv,cv;
+function rr(x,a,b,w,h,r){x.beginPath();x.roundRect(a,b,w,h,r);x.fill()}
+
+/* ---------- draw game ---------- */
+function drawGame(){
+  const{x,w,h}=gv,s=w/N;x.clearRect(0,0,w,h);
+  x.fillStyle="rgba(255,255,255,.05)";
+  for(let i=0;i<N;i++)for(let j=0;j<N;j++){x.beginPath();x.arc((i+.5)*s,(j+.5)*s,s*.07,0,7);x.fill()}
+  // food glow
+  const[fx,fy]=G.food;
+  const g=x.createRadialGradient((fx+.5)*s,(fy+.5)*s,0,(fx+.5)*s,(fy+.5)*s,s*1.6);
+  g.addColorStop(0,"rgba(235,87,87,.4)");g.addColorStop(1,"rgba(235,87,87,0)");
+  x.fillStyle=g;x.fillRect((fx-1.5)*s,(fy-1.5)*s,s*4,s*4);
+  x.fillStyle="#eb5757";x.beginPath();x.arc((fx+.5)*s,(fy+.5)*s,s*.32,0,7);x.fill();
+  // snake
+  const L=G.body.length;
+  for(let i=L-1;i>=0;i--){
+    const t=i/Math.max(L-1,1),[bx,by]=G.body[i],p=s*.08;
+    const a=.35+.65*(1-t);
+    x.fillStyle=i===0?"#c4c3ff":`rgba(${113-20*t|0},${112-6*t|0},255,${a})`;
+    rr(x,bx*s+p,by*s+p,s-2*p,s-2*p,s*.26);
+  }
+  // eyes
+  const[hx,hy]=G.body[0],[dx,dy]=DIRS[G.dir];
+  x.fillStyle="#0a0b0d";
+  for(const e of[-1,1]){
+    const ex=(hx+.5)*s+dx*s*.18-dy*e*s*.17,ey=(hy+.5)*s+dy*s*.18+dx*e*s*.17;
+    x.beginPath();x.arc(ex,ey,s*.07,0,7);x.fill();
+  }
+}
+
+/* ---------- draw network ---------- */
+function drawNet(){
+  const{x,w,h}=nv;x.clearRect(0,0,w,h);
+  const small=w<420,L=small?92:112,R=small?62:78,pad=18;
+  const xi=L,xh=L+(w-L-R)/2,xo=w-R;
+  const yi=i=>pad+(h-2*pad)*(i+.5)/11, yh=j=>pad+(h-2*pad)*(j+.5)/64, yo=k=>h/2+(k-1)*54;
+  const m=model, hmax=Math.max(1e-6,...G.h);
+  x.lineWidth=1;
+  // input -> hidden
+  for(let i=0;i<11;i++){
+    if(!G.x[i])continue;
+    for(let j=0;j<64;j++){
+      const v=m.W1[i][j];if(Math.abs(v)<.25)continue;
+      x.strokeStyle=v>0?`rgba(113,112,255,${Math.min(.5,Math.abs(v)*.28)})`:`rgba(235,87,87,${Math.min(.4,Math.abs(v)*.22)})`;
+      x.beginPath();x.moveTo(xi,yi(i));x.lineTo(xh,yh(j));x.stroke();
+    }
+  }
+  // hidden -> output
+  for(let j=0;j<64;j++){
+    if(G.h[j]<=0)continue;
+    for(let k=0;k<3;k++){
+      const v=G.h[j]*m.W2[j][k];if(Math.abs(v)<.3)continue;
+      x.strokeStyle=v>0?`rgba(113,112,255,${Math.min(.55,Math.abs(v)*.12)})`:`rgba(235,87,87,${Math.min(.45,Math.abs(v)*.1)})`;
+      x.beginPath();x.moveTo(xh,yh(j));x.lineTo(xo,yo(k));x.stroke();
+    }
+  }
+  // nodes
+  x.font="500 11px Inter,system-ui,sans-serif";x.textBaseline="middle";
+  for(let i=0;i<11;i++){
+    const on=G.x[i];
+    x.fillStyle=on?"#a9a8ff":"#1d1f24";x.beginPath();x.arc(xi,yi(i),4.2,0,7);x.fill();
+    if(on){x.shadowColor="#7170ff";x.shadowBlur=10;x.fill();x.shadowBlur=0}
+    x.strokeStyle=on?"#a9a8ff":"rgba(255,255,255,.14)";x.beginPath();x.arc(xi,yi(i),4.2,0,7);x.stroke();
+    x.fillStyle=on?"#f7f8f8":"#62666d";x.textAlign="right";x.fillText(LABELS[i],xi-12,yi(i));
+  }
+  for(let j=0;j<64;j++){
+    const a=G.h[j]/hmax;
+    x.fillStyle=a>0.02?`rgba(165,164,255,${.25+.75*a})`:"#1a1c20";
+    x.beginPath();x.arc(xh,yh(j),2.6,0,7);x.fill();
+  }
+  for(let k=0;k<3;k++){
+    const on=k===G.act;
+    x.fillStyle=on?"#7170ff":"#1d1f24";x.beginPath();x.arc(xo,yo(k),9,0,7);x.fill();
+    if(on){x.shadowColor="#7170ff";x.shadowBlur=18;x.fill();x.shadowBlur=0}
+    x.strokeStyle=on?"#c4c3ff":"rgba(255,255,255,.16)";x.beginPath();x.arc(xo,yo(k),9,0,7);x.stroke();
+    x.textAlign="left";x.fillStyle=on?"#f7f8f8":"#8a8f98";x.fillText(ACTS[k],xo+16,yo(k)-7);
+    x.fillStyle="#62666d";x.font="400 10.5px 'JetBrains Mono',monospace";x.fillText(G.q[k].toFixed(1),xo+16,yo(k)+8);
+    x.font="500 11px Inter,system-ui,sans-serif";
+  }
+  x.textAlign="center";x.fillStyle="#62666d";
+  x.fillText("input · 11",xi,8);x.fillText("hidden · 64",xh,8);x.fillText("output · 3",xo,8);
+}
+
+/* ---------- chart ---------- */
+let hover=-1;
+function drawChart(){
+  const{x,w,h}=cv,sc=DATA.scores,n=sc.length,P={l:34,r:10,t:10,b:24};
+  const mx=Math.max(10,Math.ceil(Math.max(...sc)/10)*10),X=i=>P.l+(w-P.l-P.r)*i/(n-1),Y=v=>h-P.b-(h-P.t-P.b)*v/mx;
+  x.clearRect(0,0,w,h);x.font="400 10.5px 'JetBrains Mono',monospace";x.textBaseline="middle";
+  x.strokeStyle="rgba(255,255,255,.06)";x.fillStyle="#62666d";x.textAlign="right";x.lineWidth=1;
+  for(let v=0;v<=mx;v+=mx/4){x.beginPath();x.moveTo(P.l,Y(v));x.lineTo(w-P.r,Y(v));x.stroke();x.fillText(Math.round(v),P.l-8,Y(v))}
+  x.textAlign="center";x.textBaseline="top";
+  for(let g=0;g<=n;g+=100){const i=Math.min(g,n-1);x.fillText(g,X(i),h-P.b+8)}
+  // checkpoint markers
+  x.setLineDash([3,4]);
+  cks.forEach(c=>{if(c.game>0&&c.game<n){x.strokeStyle="rgba(255,255,255,.16)";x.beginPath();x.moveTo(X(c.game),P.t);x.lineTo(X(c.game),h-P.b);x.stroke();
+    if(w>520||c.label!=="Game 25"){x.fillStyle="#8a8f98";x.textAlign="left";x.fillText(c.label,X(c.game)+5,P.t+1)}}});
+  x.setLineDash([]);
+  // raw bars
+  x.fillStyle="rgba(113,112,255,.28)";
+  const bw=Math.max(1,(w-P.l-P.r)/n-.6);
+  sc.forEach((v,i)=>{if(v>0)x.fillRect(X(i)-bw/2,Y(v),bw,Y(0)-Y(v))});
+  // moving avg
+  const k=10,av=sc.map((_,i)=>{let s=0,c=0;for(let j=Math.max(0,i-k+1);j<=i;j++){s+=sc[j];c++}return s/c});
+  const gr=x.createLinearGradient(0,0,w,0);gr.addColorStop(0,"#5e6ad2");gr.addColorStop(1,"#c4c3ff");
+  x.strokeStyle=gr;x.lineWidth=2;x.lineJoin="round";x.beginPath();av.forEach((v,i)=>i?x.lineTo(X(i),Y(v)):x.moveTo(X(i),Y(v)));x.stroke();
+  if(hover>=0){
+    x.strokeStyle="rgba(255,255,255,.3)";x.lineWidth=1;x.beginPath();x.moveTo(X(hover),P.t);x.lineTo(X(hover),h-P.b);x.stroke();
+    x.fillStyle="#fff";x.beginPath();x.arc(X(hover),Y(av[hover]),3.5,0,7);x.fill();
+  }
+  cv.av=av;cv.X=X;cv.Y=Y;cv.P=P;
+}
+
+/* ---------- ui ---------- */
+let speed=2,paused=false,sess={games:0,best:0,recent:[]},acc=0,last=performance.now(),deadAt=0;
+function seg(el,items,get,set){
+  el.innerHTML="";
+  items.forEach((it,i)=>{const b=document.createElement("button");b.textContent=it;b.onclick=()=>{set(i);paint()};el.appendChild(b)});
+  function paint(){[...el.children].forEach((b,i)=>b.setAttribute("aria-pressed",String(get()===i)))}paint();return paint;
+}
+const SP=[1,2,5,12];
+seg($("speed"),SP.map(s=>s+"×"),()=>SP.indexOf(speed),i=>speed=SP[i]);
+let curC=cks.length-1;
+function pick(i){curC=i;model=cks[i].m;$("ckptLabel").textContent=cks[i].label==="Untrained"?"random weights":"after "+cks[i].game+" games";sess={games:0,best:0,recent:[]};reset();stats()}
+const pc=seg($("ckpt"),cks.map(c=>c.label),()=>curC,pick);
+function stats(){
+  $("sScore").textContent=G.score;$("sBest").textContent=sess.best;$("sGames").textContent=sess.games;
+  const r=sess.recent;$("sAvg").textContent=r.length?(r.reduce((a,b)=>a+b,0)/r.length).toFixed(1):"0";
+}
+$("play").onclick=()=>{paused=!paused;$("play").textContent=paused?"Resume":"Pause"};
+$("restart").onclick=()=>{sess={games:0,best:0,recent:[]};reset();stats()};
+addEventListener("keydown",e=>{if(e.code==="Space"){e.preventDefault();$("play").click()}if(e.key==="r"||e.key==="R")$("restart").click()});
+$("mBest").textContent=DATA.best;$("mEval").textContent=DATA.eval_mean.toFixed(1);
+
+function loop(t){
+  const dt=Math.min(100,t-last);last=t;
+  if(!paused){
+    if(G.dead){
+      if(!deadAt){deadAt=t;$("overT").textContent="Crashed · score "+G.score;$("over").classList.add("on");
+        sess.games++;sess.best=Math.max(sess.best,G.score);sess.recent.push(G.score);if(sess.recent.length>10)sess.recent.shift();stats()}
+      if(t-deadAt>650/Math.min(speed,3)){deadAt=0;$("over").classList.remove("on");reset();stats()}
+    }else{
+      acc+=dt/1000*10*speed;
+      while(acc>=1&&!G.dead){acc--;step();if(G.dead)break}
+      stats();
+    }
+  }
+  drawGame();drawNet();
+  requestAnimationFrame(loop);
+}
+
+/* chart hover */
+const tip=$("tip");
+function hv(e){
+  const r=$("chart").getBoundingClientRect(),px=(e.touches?e.touches[0].clientX:e.clientX)-r.left,n=DATA.scores.length;
+  const i=Math.round((px-cv.P.l)/(r.width-cv.P.l-cv.P.r)*(n-1));
+  if(i<0||i>=n){leave();return}
+  hover=i;drawChart();
+  tip.style.opacity=1;tip.innerHTML="game "+(i+1)+" · score "+DATA.scores[i]+" · avg "+cv.av[i].toFixed(1);
+  tip.style.left=Math.min(Math.max(px-60,0),r.width-190)+14+"px";tip.style.top="0px";
+}
+function leave(){hover=-1;tip.style.opacity=0;drawChart()}
+
+function layout(){gv=fit($("game"));nv=fit($("net"));cv=fit($("chart"));drawChart()}
+addEventListener("resize",layout);
+$("chart").addEventListener("mousemove",hv);$("chart").addEventListener("mouseleave",leave);
+$("chart").addEventListener("touchmove",hv,{passive:true});$("chart").addEventListener("touchend",leave);
+(document.fonts&&document.fonts.ready||Promise.resolve()).then(layout);
+layout();pick(cks.length-1);requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

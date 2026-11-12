@@ -12,4 +12,4 @@ A neural network that learns Snake. NumPy only: hand-written forward pass, Q-lea
     open index.html
 
 ## Deploy ($0)
-Push to GitHub, import the repo at vercel.com/new, no build settings needed.
+Deployed on Netlify straight from the repo root: no build command, publish directory is the root (`index.html` is prebuilt).
